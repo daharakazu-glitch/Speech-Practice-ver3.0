@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スピーチ練習＆評価アプリ v3.0</title>
+    <!-- Tailwind CSSを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Interフォントの読み込み（Tailwindのデフォルト） */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* 評価結果用のスタイル */
+        .evaluation-grid {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 0.5rem 1rem;
+        }
+        /* アクティブなタブのスタイル（JSで制御するクラス） */
+        .tab-button.active {
+            color: #2563EB; /* text-blue-600 */
+            border-color: #2563EB; /* border-blue-600 */
+        }
+        /* 非アクティブなタブのスタイル */
+        .tab-button.inactive {
+            color: #6B7280; /* text-gray-500 */
+            border-color: transparent;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4 md:p-8">
+    <div class="w-full max-w-4xl bg-white rounded-2xl shadow-xl p-6 md:p-10 space-y-6">
+        <h1 class="text-2xl md:text-3xl font-bold text-center text-gray-800">
+            スピーチ練習 & 評価アプリ (v3.0)
+        </h1>
+
+        <!-- 練習モード選択タブ -->
+        <div class="mb-4 border-b border-gray-200">
+            <nav class="flex -mb-px space-x-6" aria-label="Tabs">
+                <button id="tabSampleScript" class="tab-button whitespace-nowrap py-3 px-1 border-b-2 font-medium text-lg text-blue-600 border-blue-600" aria-current="page">
+                    原稿例あり
+                </button>
+                <button id="tabMyScript" class="tab-button whitespace-nowrap py-3 px-1 border-b-2 font-medium text-lg text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300">
+                    自分の原稿で
+                </button>
+            </nav>
+        </div>
+
+        <!-- 1. スピーチ内容エリア -->
+        <div class="space-y-3">
+            <h2 class="text-xl font-semibold text-gray-700">1. スピーチ内容</h2>
+            <!-- 原稿例ありエリア -->
+            <div id="sample-script-area">
+                <div id="speech-script" class="w-full h-64 p-4 bg-gray-50 border border-gray-300 rounded-lg overflow-y-auto text-gray-800 leading-relaxed">
+                    <p class="font-bold text-lg mb-2">What would you do if you won the lottery?</p>
+                    <p class="mb-3">It is not too much to say everyone wants to be rich. If you won the lottery and became super rich, what would you do? If I won the lottery and became a billionaire, I would use my money to spend a lot of time seeing the world.</p>
+                    <p class="mb-3">First, I would buy a house in Hollywood. Living in Hollywood is one of my dreams. When I was a kid, I watched movies set in Hollywood. I was so impressed with the exciting Hollywood life in these movies. This made me want to live there as if I were one of the movie characters.</p>
+                    <p class="mb-3">Second, I would watch soccer matches live throughout Europe. I’ve wanted to watch matches in different leagues every weekend since I started playing soccer.</p>
+                    <p>Overall, I would use the lottery money to spend a lot of time in foreign countries. I want to be more than a tourist and experience everyday life in other cultures. Thank you for listening.</p>
+                </div>
+            </div>
+            <!-- 自分の原稿でエリア (デフォルトは非表示) -->
+            <div id="my-script-area" class="hidden space-y-4">
+                <!-- テキスト入力 -->
+                <textarea id="my-script-textarea" class="w-full h-48 p-4 bg-gray-50 border border-gray-300 rounded-lg text-gray-800 leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="ここに自分の原稿を入力または貼り付けるか、下のボタンから画像をアップロードしてください..."></textarea>
+                
+                <!-- 画像アップロードセクション -->
+                <div class="space-y-2">
+                    <label for="imageUpload" class="text-sm font-medium text-gray-700">または、原稿の画像をアップロード:</label>
+                    <input type="file" id="imageUpload" accept="image/*" class="block w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-lg file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-blue-50 file:text-blue-700
+                        hover:file:bg-blue-100 cursor-pointer"/>
+                </div>
+
+                <!-- 画像プレビュー＆抽出ボタン -->
+                <div id="imagePreviewContainer" class="hidden space-y-3">
+                    <p class="text-sm font-medium text-gray-700">画像プレビュー:</p>
+                    <img id="imagePreview" src="#" alt="原稿プレビュー" class="max-h-60 w-auto border border-gray-300 rounded-lg object-contain"/>
+                    <button id="extractTextButton" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-5 rounded-lg shadow-md transition-all duration-300 ease-in-out disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                        画像からテキストを抽出
+                    </button>
+                    <div id="loadingIndicator" class="hidden flex items-center space-x-2 text-gray-600">
+                        <svg class="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>テキストを抽出中... (最大30秒程度)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- 2. 録音・再生エリア -->
+        <div class="space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700">2. 録音と再生</h2>
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+                <button id="recordButton" class="w-full sm:w-auto flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-300 ease-in-out">
+                    録音開始
+                </button>
+                <div id="statusMessage" class="text-gray-600 text-center sm:text-left">
+                    ボタンを押して録音を開始してください。
+                </div>
+            </div>
+            <audio id="audioPlayer" controls class="w-full hidden mt-4"></audio>
+        </div>
+
+        <!-- 3. 評価エリア -->
+        <div class="space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700">3. スピーチ評価</h2>
+            <button id="evaluateButton" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-300 ease-in-out disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                評価する
+            </button>
+            <div id="evaluationResult" class="hidden w-full p-5 bg-blue-50 border border-blue-200 rounded-lg space-y-6 mt-4">
+                <!-- 評価結果がここに挿入されます -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM要素の取得
+        const recordButton = document.getElementById('recordButton');
+        const evaluateButton = document.getElementById('evaluateButton');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const statusMessage = document.getElementById('statusMessage');
+        const evaluationResult = document.getElementById('evaluationResult');
+        
+        const tabSampleScript = document.getElementById('tabSampleScript');
+        const tabMyScript = document.getElementById('tabMyScript');
+        const sampleScriptArea = document.getElementById('sample-script-area');
+        const myScriptArea = document.getElementById('my-script-area');
+        
+        // 「自分の原稿で」エリアの要素
+        const myScriptTextarea = document.getElementById('my-script-textarea');
+        const imageUpload = document.getElementById('imageUpload');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const extractTextButton = document.getElementById('extractTextButton');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        let audioBlob = null;
+        let practiceMode = 'sampleScript'; // 'sampleScript' or 'myScript'
+        let imageBase64Data = null; // 画像のBase64データを保持
+
+        // タブ切り替え時に録音状態をリセットする関数
+        const resetPracticeArea = () => {
+            // 録音状態をリセット
+            if (isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                recordButton.textContent = '録音開始';
+                recordButton.classList.remove('bg-red-600', 'hover:bg-red-700');
+                recordButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            }
+            statusMessage.textContent = 'ボタンを押して録音を開始してください。';
+            audioPlayer.classList.add('hidden');
+            audioPlayer.src = '';
+            audioBlob = null;
+            evaluateButton.disabled = true;
+            evaluationResult.classList.add('hidden');
+
+            // 「自分の原稿で」エリアのリセット
+            myScriptTextarea.value = '';
+            imageUpload.value = null;
+            imagePreviewContainer.classList.add('hidden');
+            imagePreview.src = '#';
+            loadingIndicator.classList.add('hidden');
+            extractTextButton.disabled = true;
+            imageBase64Data = null;
+        };
+        
+        // タブ切り替えロジック
+        const switchTab = (mode) => {
+            practiceMode = mode;
+            const isSampleScript = (mode === 'sampleScript');
+
+            // tabSampleScript のスタイル制御
+            tabSampleScript.classList.toggle('text-blue-600', isSampleScript);
+            tabSampleScript.classList.toggle('border-blue-600', isSampleScript);
+            tabSampleScript.classList.toggle('text-gray-500', !isSampleScript);
+            tabSampleScript.classList.toggle('border-transparent', !isSampleScript);
+            tabSampleScript.classList.toggle('hover:text-gray-700', !isSampleScript);
+            tabSampleScript.classList.toggle('hover:border-gray-300', !isSampleScript);
+            isSampleScript ? tabSampleScript.setAttribute('aria-current', 'page') : tabSampleScript.removeAttribute('aria-current');
+
+            // tabMyScript のスタイル制御
+            tabMyScript.classList.toggle('text-blue-600', !isSampleScript);
+            tabMyScript.classList.toggle('border-blue-600', !isSampleScript);
+            tabMyScript.classList.toggle('text-gray-500', isSampleScript);
+            tabMyScript.classList.toggle('border-transparent', isSampleScript);
+            tabMyScript.classList.toggle('hover:text-gray-700', isSampleScript);
+            tabMyScript.classList.toggle('hover:border-gray-300', isSampleScript);
+            !isSampleScript ? tabMyScript.setAttribute('aria-current', 'page') : tabMyScript.removeAttribute('aria-current');
+
+            // エリアの表示切り替え
+            sampleScriptArea.classList.toggle('hidden', !isSampleScript);
+            myScriptArea.classList.toggle('hidden', isSampleScript);
+        };
+
+        tabSampleScript.addEventListener('click', () => {
+            switchTab('sampleScript');
+            resetPracticeArea();
+        });
+        tabMyScript.addEventListener('click', () => {
+            switchTab('myScript');
+            resetPracticeArea();
+        });
+
+        // 画像アップロードの処理
+        imageUpload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const imageUrl = e.target.result;
+                    imagePreview.src = imageUrl;
+                    imagePreviewContainer.classList.remove('hidden');
+                    extractTextButton.disabled = false;
+                    
+                    // Base64データを保持 (プレフィックスを除去)
+                    imageBase64Data = imageUrl.split(',')[1];
+                    // テキストエリアをクリア
+                    myScriptTextarea.value = ''; 
+                    loadingIndicator.classList.add('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 「画像からテキストを抽出」ボタンの処理
+        extractTextButton.addEventListener('click', () => {
+            if (imageBase64Data) {
+                callVisionAPI(imageBase64Data);
+            }
+        });
+
+        // Gemini API (Vision) を呼び出す関数
+        async function callVisionAPI(base64ImageData) {
+            loadingIndicator.classList.remove('hidden');
+            extractTextButton.disabled = true;
+
+            const apiKey = ""; // APIキーは空のままにします
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: "この画像からテキストを日本語で抽出してください。改行もできるだけ正確に再現してください。" },
+                            {
+                                inlineData: {
+                                    mimeType: "image/png", // アップロードタイプに関わらずpng/jpegで動作する
+                                    data: base64ImageData
+                                }
+                            }
+                        ]
+                    }
+                ],
+            };
+
+            try {
+                // 指数関数的バックオフでリトライ
+                let response;
+                let delay = 1000; // 1秒から開始
+                for (let i = 0; i < 5; i++) { // 最大5回リトライ
+                    response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        break; // 成功したらループを抜ける
+                    }
+                    
+                    // 429 (Too Many Requests) や 5xx サーバーエラーの場合リトライ
+                    if (response.status === 429 || response.status >= 500) {
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; // 次の遅延を倍にする
+                    } else {
+                        // その他のクライアントエラー（400など）はリトライしない
+                        throw new Error(`APIリクエスト失敗: ${response.status} ${response.statusText}`);
+                    }
+                }
+                
+                if (!response.ok) {
+                    throw new Error(`APIリクエスト失敗 (リトライ上限到達): ${response.status} ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0].text) {
+                    const extractedText = result.candidates[0].content.parts[0].text;
+                    myScriptTextarea.value = extractedText;
+                } else {
+                    console.error("APIからの予期しないレスポンス:", result);
+                    if (result.candidates && result.candidates[0].finishReason) {
+                        myScriptTextarea.value = `エラー: テキストを抽出できませんでした。理由: ${result.candidates[0].finishReason}`;
+                    } else {
+                        myScriptTextarea.value = "エラー: テキストを抽出できませんでした。レスポンス形式が正しくありません。";
+                    }
+                }
+
+            } catch (error) {
+                console.error("テキスト抽出エラー:", error);
+                myScriptTextarea.value = `エラー: テキストの抽出に失敗しました。(${error.message})`;
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                extractTextButton.disabled = false; // エラーでも再度試せるように有効化
+            }
+        }
+
+
+        // 録音ボタンのクリックイベント
+        recordButton.addEventListener('click', async () => {
+            if (isRecording) {
+                // 録音停止
+                mediaRecorder.stop();
+                isRecording = false;
+                recordButton.textContent = '録音開始';
+                recordButton.classList.remove('bg-red-600', 'hover:bg-red-700');
+                recordButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                statusMessage.textContent = '録音が完了しました。再生して確認できます。';
+            } else {
+                // 録音開始
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = []; // チャンクをリセット
+
+                    // 録音開始時に既存の評価や音声をクリア
+                    audioPlayer.classList.add('hidden');
+                    audioPlayer.src = '';
+                    audioBlob = null;
+                    evaluateButton.disabled = true;
+                    evaluationResult.classList.add('hidden');
+
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = () => {
+                        audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        audioPlayer.src = audioUrl;
+                        audioPlayer.classList.remove('hidden');
+                        
+                        // duration (録音時間) が取得可能になったら評価ボタンを有効化
+                        audioPlayer.onloadedmetadata = () => {
+                            evaluateButton.disabled = false; // 評価ボタンを有効化
+                        };
+                        
+                        // マイクのトラックを停止（赤い録音中インジケータを消すため）
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordButton.textContent = '録音停止';
+                    recordButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                    recordButton.classList.add('bg-red-600', 'hover:bg-red-700');
+                    statusMessage.textContent = '録音中...';
+
+                } catch (err) {
+                    console.error('マイクへのアクセスに失敗しました:', err);
+                    statusMessage.textContent = 'エラー: マイクへのアクセスが許可されませんでした。';
+                }
+            }
+        });
+
+        // 録音時間に基づいた評価ロジック
+        const calculateScoreByDuration = (d) => {
+            if (d < 10) {
+                return Math.floor(Math.random() * 2) + 1; // 1, 2
+            } else if (d < 30) {
+                return Math.floor(Math.random() * 3) + 2; // 2, 3, 4
+            } else {
+                return Math.floor(Math.random() * 3) + 3; // 3, 4, 5 (甘め)
+            }
+        };
+        
+        // 録音時間が短い場合の「内容」評価 (固定値用)
+        const calculateContentScore = (d) => {
+            if (d < 10) return 1;
+            if (d < 30) return 3;
+            return 4; // 30秒以上なら固定の4
+        };
+        
+        // NEW: AI Content Evaluation Function
+        async function callContentEvaluationAPI(scriptText) {
+            const apiKey = ""; // APIキーは空のままにします
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            const systemPrompt = "あなたはスピーチとプレゼンテーションの優れたコーチです。提供されたスピーチ原稿を分析し、指定された評価項目に基づいて5段階で採点し、具体的で建設的なフィードバックを日本語で提供してください。評価は全体的にやや甘めに（3〜5点の範囲で）設定してください。";
+
+            const payload = {
+                contents: [{
+                    parts: [{ text: scriptText }]
+                }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            "scoreItem1": { 
+                                "type": "NUMBER", 
+                                "description": "興味深いトピックか (1-5で採点)" 
+                            },
+                            "scoreItem2": { 
+                                "type": "NUMBER", 
+                                "description": "内容はわかりやすかったか・論点は明確だったか (1-5で採点)" 
+                            },
+                            "scoreItem3": { 
+                                "type": "NUMBER", 
+                                "description": "十分な情報があったか (1-5で採点)" 
+                            },
+                            "goodPoint": { 
+                                "type": "STRING", 
+                                "description": "原稿の内容に関する「良かった点」を具体的に1つ" 
+                            },
+                            "improvementPoint": { 
+                                "type": "STRING", 
+                                "description": "原稿の内容に関する「改善すべき点」を具体的に1つ" 
+                            }
+                        },
+                        "required": ["scoreItem1", "scoreItem2", "scoreItem3", "goodPoint", "improvementPoint"]
+                    }
+                }
+            };
+
+            // 指数関数的バックオフでリトライ
+            let response;
+            let delay = 1000;
+            for (let i = 0; i < 5; i++) {
+                response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) break;
+                if (response.status === 429 || response.status >= 500) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                } else {
+                    throw new Error(`APIリクエスト失敗: ${response.status} ${response.statusText}`);
+                }
+            }
+            if (!response.ok) {
+                throw new Error(`APIリクエスト失敗 (リトライ上限到達): ${response.status} ${response.statusText}`);
+            }
+
+            const result = await response.json();
+
+            if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0].text) {
+                const jsonText = result.candidates[0].content.parts[0].text;
+                return JSON.parse(jsonText);
+            } else {
+                console.error("APIからの予期しないレスポンス:", result);
+                throw new Error("AI評価データの取得に失敗しました。");
+            }
+        }
+
+
+        // 評価ボタンのクリックイベント (asyncに変更)
+        evaluateButton.addEventListener('click', async () => {
+            if (!audioBlob) {
+                evaluationResult.textContent = '評価する録音がありません。';
+                evaluationResult.classList.remove('hidden');
+                return;
+            }
+
+            // 評価中にボタンを無効化
+            evaluateButton.disabled = true;
+            evaluateButton.textContent = '評価中...';
+            evaluationResult.innerHTML = `
+                <div class="flex items-center justify-center space-x-2 text-gray-600">
+                    <svg class="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>AIが評価中です... (最大30秒程度)</span>
+                </div>`;
+            evaluationResult.classList.remove('hidden');
+
+            const duration = audioPlayer.duration; // 録音時間を取得 (秒)
+            
+            let scores, goodPoints, improvementPoints;
+            let durationFeedback = ""; // durationFeedbackを先に定義
+
+            try {
+                if (practiceMode === 'sampleScript') {
+                    // 「原稿例あり」の評価 (API呼び出しなし)
+                    const contentScore = calculateContentScore(duration);
+                    const deliveryScore = calculateScoreByDuration(duration);
+                    scores = {
+                        item1: contentScore,    // ① 興味深いトピック
+                        item2: contentScore,    // ② わかりやすさ・論点
+                        item3: contentScore,    // ③ 情報量
+                        item4: deliveryScore, // ④ 声の大きさ
+                        item5: deliveryScore  // ⑤ 速度・ポーズ
+                    };
+                    goodPoints = [
+                        "原稿の内容はしっかり伝わっていました！",
+                        "落ち着いて話せていて良かったです。",
+                        "発音が明瞭で聞き取りやすい部分が多かったです。"
+                    ];
+                    improvementPoints = [
+                        "もう少し声に強弱をつけると、さらに引き込まれるスピーチになります。",
+                        "間の取り方（ポーズ）を意識すると、聞いている人が内容を理解しやすくなります。",
+                        "もう少しだけゆっくり話すと、より丁寧な印象になります。"
+                    ];
+                
+                } else { // 'myScript'
+                    // 「自分の原稿で」の評価 (AI呼び出しあり)
+                    const scriptText = myScriptTextarea.value;
+                    if (scriptText.trim().length < 20) {
+                        // テキストが短すぎる場合はAPIを呼ばない
+                        throw new Error("原稿が短すぎます。20文字以上入力してください。");
+                    }
+
+                    // 1. 音声（疑似）評価
+                    const deliveryScore = calculateScoreByDuration(duration);
+                    
+                    // 2. 内容（AI）評価
+                    const aiEvaluation = await callContentEvaluationAPI(scriptText);
+
+                    scores = {
+                        item1: aiEvaluation.scoreItem1,
+                        item2: aiEvaluation.scoreItem2,
+                        item3: aiEvaluation.scoreItem3,
+                        item4: deliveryScore, // 音声評価
+                        item5: deliveryScore  // 音声評価
+                    };
+
+                    // AIのフィードバックと静的なフィードバックを組み合わせる
+                    goodPoints = [
+                        aiEvaluation.goodPoint, // AIによる内容のフィードバック
+                        "ハキハキとした話し方で、自信が伝わってきました。" // 静的な音声フィードバック
+                    ];
+                    improvementPoints = [
+                        aiEvaluation.improvementPoint, // AIによる内容のフィードバック
+                        "「えー」「あのー」といったフィラー（つなぎ言葉）を減らすと、さらに聞きやすくなります。" // 静的な音声フィードバック
+                    ];
+                }
+
+                // 録音時間が短すぎる場合の追加フィードバック
+                if (duration < 10) {
+                    durationFeedback = `<p class="text-sm text-red-600 font-semibold mb-3 p-3 bg-red-100 border border-red-300 rounded-md">※ 録音時間が10秒未満でした。スピーチ全体を録音すると、より正確な評価ができます。</p>`;
+                } else if (duration < 30 && practiceMode === 'sampleScript') {
+                    durationFeedback = `<p class="text-sm text-yellow-700 font-semibold mb-3 p-3 bg-yellow-100 border border-yellow-300 rounded-md">※ 録音時間が30秒未満でした。原稿の最後まで読むともう少し時間がかかるはずです。</p>`;
+                }
+
+                // 評価結果をHTMLとして生成
+                evaluationResult.innerHTML = `
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">評価結果（${practiceMode === 'sampleScript' ? '原稿例あり' : '自分の原稿で'}）</h3>
+                    ${durationFeedback}
+                    
+                    <!-- 評価 -->
+                    <div>
+                        <h4 class="font-semibold text-gray-700 mb-3">■ スピーチ評価 (5段階)</h4>
+                        <div class="evaluation-grid pl-4">
+                            <span>① 興味深いトピックだったか</span>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div class="bg-blue-500 h-2.5 rounded-full" style="width: ${scores.item1 * 20}%"></div>
+                            </div>
+                            <span class="font-bold text-lg text-blue-600">${scores.item1}</span>
+                            
+                            <span>② 内容はわかりやすかったか・論点は明確だったか</span>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div class="bg-blue-500 h-2.5 rounded-full" style="width: ${scores.item2 * 20}%"></div>
+                            </div>
+                            <span class="font-bold text-lg text-blue-600">${scores.item2}</span>
+                            
+                            <span>③ 十分な情報があったか</span>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div class="bg-blue-500 h-2.5 rounded-full" style="width: ${scores.item3 * 20}%"></div>
+                            </div>
+                            <span class="font-bold text-lg text-blue-600">${scores.item3}</span>
+
+                            <span>④ 声の大きさ・発声の明瞭さ</span>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div class="bg-green-500 h-2.5 rounded-full" style="width: ${scores.item4 * 20}%"></div>
+                            </div>
+                            <span class="font-bold text-lg text-green-600">${scores.item4}</span>
+                            
+                            <span>⑤ 話す速度・強弱・ポーズ</span>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div class="bg-green-500 h-2.5 rounded-full" style="width: ${scores.item5 * 20}%"></div>
+                            </div>
+                            <span class="font-bold text-lg text-green-600">${scores.item5}</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2 pl-4">※ ④と⑤は録音時間に基づく簡易評価です。姿勢・アイコンタクト、資料の提示の仕方は音声評価から除外しています。</p>
+                    </div>
+
+                    <!-- 総合フィードバック -->
+                    <div class="space-y-3 pt-4 border-t border-blue-200">
+                        <div>
+                            <h4 class="font-semibold text-gray-700 mb-2">▼ 良かった点</h4>
+                            <p class="text-gray-800 bg-white p-3 rounded-md border border-gray-200">${goodPoints[Math.floor(Math.random() * goodPoints.length)]}</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-700 mb-2">▼ 改善すべき点</h4>
+                            <p class="text-gray-800 bg-white p-3 rounded-md border border-gray-200">${improvementPoints[Math.floor(Math.random() * improvementPoints.length)]}</p>
+                        </div>
+                    </div>
+                `;
+
+            } catch (error) {
+                console.error("評価エラー:", error);
+                evaluationResult.innerHTML = `<p class="text-red-600 font-semibold">評価エラー: ${error.message}</p>`;
+            } finally {
+                // 評価完了（成功または失敗）でボタンを元に戻す
+                evaluateButton.disabled = false;
+                evaluateButton.textContent = '評価する';
+                // (evaluationResult.classList.remove('hidden'); は try の冒頭で実行済み)
+            }
+        });
+    </script>
+</body>
+</html>
